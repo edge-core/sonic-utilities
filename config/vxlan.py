@@ -28,6 +28,9 @@ def add_vxlan(db, vxlan_name, src_ip):
     if(vxlan_count > 0):
         ctx.fail("VTEP already configured.")  
 
+    if len(vxlan_name) > 10:
+       ctx.fail("The length of the VTEP name should be less than 10 characters")
+
     fvs = {'src_ip': src_ip}
     db.cfgdb.set_entry('VXLAN_TUNNEL', vxlan_name, fvs)
 
