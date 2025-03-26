@@ -178,3 +178,59 @@ def config(db):
     header = ['Name', 'VID', 'Member', 'Mode']
     click.echo(tabulate(tablelize(keys, data), header))
 
+#Neigh Suppress
+@click.group(cls=clicommon.AliasedGroup)
+def neigh_suppress():
+    """ show neigh-suppress """
+    pass
+@neigh_suppress.command('all')
+@clicommon.pass_db
+def neigh_suppress_all(db):
+    """ Show neigh-suppress all """
+
+    header = ['VLAN', 'STATUS', 'ASSOCIATED_NETDEV']
+    body = []
+
+    vxlan_table = db.cfgdb.get_table('VXLAN_TUNNEL_MAP')
+    suppress_table = db.cfgdb.get_table('SUPPRESS_VLAN_NEIGH')
+    vxlan_keys = vxlan_table.keys()
+    num=0
+    if vxlan_keys is not None:
+      for key in natsorted(vxlan_keys):
+          key1 = vxlan_table[key]['vlan']
+          netdev = vxlan_keys[0][0]+"-"+key1[4:]
+          if key1 not in suppress_table:
+              supp_str = "Not Configured"
+          else:
+              supp_str = "Configured"
+          body.append([vxlan_table[key]['vlan'], supp_str, netdev])
+          num += 1
+    click.echo(tabulate(body, header, tablefmt="grid"))
+    output = 'Total count : '
+    output += ('%s \n' % (str(num)))
+    click.echo(output)
+
+@neigh_suppress.command('vlan')
+@click.argument('vid', metavar='<vid>', required=True, type=int)
+@clicommon.pass_db
+def neigh_suppress_vlan(db,vid):
+    """ Show neigh-suppress vlan"""
+    header = ['VLAN', 'STATUS', 'ASSOCIATED_NETDEV']
+    body = []
+
+    vxlan_table = db.cfgdb.get_table('VXLAN_TUNNEL_MAP')
+    suppress_table = db.cfgdb.get_table('SUPPRESS_VLAN_NEIGH')
+    vlan = 'Vlan{}'.format(vid)
+    vxlan_keys = vxlan_table.keys()
+
+    if vxlan_keys is not None:
+      for key in natsorted(vxlan_keys):
+          key1 = vxlan_table[key]['vlan']
+          if(key1 == vlan):
+                netdev = vxlan_keys[0][0]+"-"+key1[4:]
+                if key1 in suppress_table:
+                    supp_str = "Configured"
+                    body.append([vxlan_table[key]['vlan'], supp_str, netdev])
+                    click.echo(tabulate(body, header, tablefmt="grid"))
+                    return
+    print(vlan + " is not configured in vxlan tunnel map table")
