@@ -61,6 +61,7 @@ from .config_mgmt import ConfigMgmtDPB, ConfigMgmt
 from . import mclag
 from . import syslog
 from . import dns
+from . import stp
 
 # mock masic APIs for unit test
 try:
@@ -566,6 +567,38 @@ def get_intf_ipv6_link_local_mode(ctx, interface_name, table_name):
             return "disable"
     else:
         return ""
+
+def get_interface_vrf_name(config_db, interface_name):
+    """Get interface vrf name, return 'default' if not bind to vrf
+    """
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "":
+        return "default"
+    entry = config_db.get_entry(table_name, interface_name)
+    if entry and entry.get("vrf_name"):
+        return entry.get("vrf_name")
+    return "default"
+
+def is_ipaddress_overlapped(interface_name, ip_addr):
+    """Check if the ip address overlapped with existing networks in the same vrf
+    """
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    interface_dict = config_db.get_table('INTERFACE')
+    interface_dict.update(config_db.get_table('PORTCHANNEL_INTERFACE'))
+    interface_dict.update(config_db.get_table('VLAN_INTERFACE'))
+    interface_dict.update(config_db.get_table('LOOPBACK_INTERFACE'))
+    ip_network = ipaddress.ip_network(ip_addr, strict=False)
+
+    for key in interface_dict.keys():
+        if not isinstance(key, tuple):
+            continue
+        if ipaddress.ip_network(key[1], strict=False).overlaps(ip_network):
+            vrf_name_new = get_interface_vrf_name(config_db, interface_name)
+            vrf_name_exist = get_interface_vrf_name(config_db, key[0])
+            if vrf_name_new == vrf_name_exist:
+                return True
+    return False
 
 def _is_neighbor_ipaddress(config_db, ipaddress):
     """Returns True if a neighbor has the IP address <ipaddress>, False if not
@@ -1204,7 +1237,10 @@ config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
 
-#add mclag commands
+# add stp commands
+config.add_command(stp.spanning_tree)
+
+# add mclag commands
 config.add_command(mclag.mclag)
 config.add_command(mclag.mclag_member)
 config.add_command(mclag.mclag_unique_ip)
@@ -4843,6 +4879,8 @@ def add(ctx, interface_name, ip_addr, gw):
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+    if is_ipaddress_overlapped(interface_name, str(ip_address)):
+        ctx.fail("IP address {} overlaps with existing subnet".format(str(ip_address)))
     interface_entry = config_db.get_entry(table_name, interface_name)
     if len(interface_entry) == 0:
         if table_name == "VLAN_SUB_INTERFACE":
@@ -6206,6 +6244,20 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
 
     return table_info
 
+
+def validate_services(ctx, param, value):
+    if value == None:
+        return None
+
+    service_list = value.split(',')
+
+    for s in service_list:
+        if s not in ['SSH', 'SNMP', 'NTP']:
+            raise click.BadParameter('{} is not a valid service.'.format(value))
+
+    return service_list
+
+
 #
 # 'table' subcommand ('config acl add table ...')
 #
@@ -6216,8 +6268,10 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
 @click.option("-d", "--description")
 @click.option("-p", "--ports")
 @click.option("-s", "--stage", type=click.Choice(["ingress", "egress"]), default="ingress")
+@click.option("-S", "--services", metavar="<SSH|SNMP|NTP>",
+              callback=validate_services, help="List of services")
 @click.pass_context
-def table(ctx, table_name, table_type, description, ports, stage):
+def table(ctx, table_name, table_type, description, ports, stage, services):
     """
     Add ACL table
     """
@@ -6229,7 +6283,16 @@ def table(ctx, table_name, table_type, description, ports, stage):
     except ValueError as e:
         ctx.fail("Failed to parse ACL table config: exception={}".format(e))
 
+    if "CTRLPLANE" == table_type.upper():
+        if not services:
+            raise click.BadParameter('Option "--services" is required for CTRLPLANE.')
+
+        table_info["services@"] = ",".join(services)
+        table_info["type"] = "CTRLPLANE"
+        del table_info["ports"]
+
     config_db.set_entry("ACL_TABLE", table_name, table_info)
+
 
 #
 # 'remove' subgroup ('config acl remove ...')
@@ -7619,7 +7682,10 @@ def date(date, time):
     clicommon.run_command(['timedatectl', 'set-time', date_time])
 
 from . import qos as qos_command
+from . import wred as wred_command
 
 qos_command.add_command(qos, interface)
+wred_command.add_command(config, interface)
+
 if __name__ == '__main__':
     config()
