@@ -3648,7 +3648,44 @@ def delete_snmptrap_server(ctx, serverip):
     cmd="systemctl restart snmp"
     os.system (cmd)
 
+@snmptrap.group('source-addr')
+@click.pass_context
+def source_ip(ctx):
+    pass
 
+@source_ip.command('set')
+@click.argument('sourceip', metavar='<SNMP TRAP Add Source IP Address>', required=True)
+@click.pass_context
+def set_source_ip(ctx, sourceip):
+    """Add the SNMP Trap sourceip configuration"""
+
+    config_db = ctx.obj['db']
+    config_db.mod_entry("SNMP_TRAP_CONFIG", "GLOBAL", {"sourceip": sourceip})
+
+    cmd="systemctl reset-failed snmp"
+    os.system (cmd)
+
+    cmd="systemctl restart snmp"
+    os.system (cmd)
+
+@source_ip.command('remove')
+@click.pass_context
+def remove_source_ip(ctx):
+    """Delete the SNMP Trap sourceip configuration"""
+
+    config_db = ctx.obj['db']
+
+    current_entry = config_db.get_entry("SNMP_TRAP_CONFIG", "GLOBAL")
+    if len(current_entry) != 0:
+        if "sourceip" in current_entry:
+            del current_entry['sourceip']
+            config_db.set_entry("SNMP_TRAP_CONFIG", "GLOBAL", current_entry)
+
+    cmd="systemctl reset-failed snmp"
+    os.system (cmd)
+
+    cmd="systemctl restart snmp"
+    os.system (cmd)
 
 #
 # 'snmp' group ('config snmp ...')
