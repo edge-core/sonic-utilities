@@ -1254,6 +1254,7 @@ config.add_command(kdump.kdump)
 config.add_command(kube.kubernetes)
 config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
+config.add_command(vlan.neigh_suppress)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
 
