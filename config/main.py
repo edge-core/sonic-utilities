@@ -7106,7 +7106,7 @@ def global_sample_direction(ctx, direction):
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 def is_valid_sample_rate(rate):
-    return rate.isdigit() and int(rate) in range(256, 8388608 + 1)
+    return rate.isdigit() and int(rate) in range(100, 8388608 + 1)
 
 
 #
@@ -7187,7 +7187,7 @@ def sample_rate(ctx, ifname, rate):
             click.echo('Invalid interface name')
             return
         if not is_valid_sample_rate(rate) and rate != 'default':
-            click.echo('Error: Sample rate must be between 256 and 8388608 or default')
+            click.echo('Error: Sample rate must be between 100 and 8388608 or default')
             return
 
     sess_dict = config_db.get_table('SFLOW_SESSION')
