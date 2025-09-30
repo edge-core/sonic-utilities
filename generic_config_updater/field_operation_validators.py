@@ -26,6 +26,8 @@ def get_asic_name():
 
     if asic_type == 'cisco-8000':
         asic = "cisco-8000"
+    elif asic_type == 'xsight':
+        asic = "xsight"
     elif asic_type == 'mellanox' or asic_type == 'vs' or asic_type == 'broadcom':
         proc = subprocess.Popen(GET_HWSKU_CMD, shell=True, universal_newlines=True, stdout=subprocess.PIPE)
         output, err = proc.communicate()
