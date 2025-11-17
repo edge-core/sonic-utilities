@@ -74,10 +74,10 @@ class NbrBase(object):
         if self.if_br_oid_map is None:
             return
 
+        bvid_to_vlan = {}
         oid_pfx = len("oid:0x")
         for s in fdb_str:
-            fdb_entry = s
-            fdb = json.loads(fdb_entry .split(":", 2)[-1])
+            fdb = json.loads(s.split(":", 2)[-1])
             if not fdb:
                 continue
 
@@ -92,24 +92,34 @@ class NbrBase(object):
             br_port_id = ent["SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID"][oid_pfx:]
             if br_port_id not in self.if_br_oid_map:
                 continue
+
             port_id = self.if_br_oid_map[br_port_id]
-            if port_id in self.if_oid_map:
-                if_name = self.if_oid_map[port_id]
-            else:
-                if_name = port_id
+            if_name = self.if_oid_map.get(port_id, port_id)
+
+            vlan_id = None
             if 'vlan' in fdb:
                 vlan_id = fdb["vlan"]
             elif 'bvid' in fdb:
-                try:
-                    vlan_id = port_util.get_vlan_id_from_bvid(self.db, fdb["bvid"])
-                    if vlan_id is None:
-                        # the case could be happened if the FDB entry has created with linking to
-                        # default VLAN 1, which is not present in the system
-                        continue
-                except Exception:
-                    vlan_id = fdb["bvid"]
-                    print("Failed to get Vlan id for bvid {}\n".format(fdb["bvid"]))
-            self.bridge_mac_list.append((int(vlan_id),) + (fdb["mac"],) + (if_name,))
+                bvid = fdb["bvid"]
+
+                # If BVID not cached, resolve it now
+                if bvid not in bvid_to_vlan:
+                    try:
+                        resolved_vlan_id = port_util.get_vlan_id_from_bvid(self.db, bvid)
+                        if resolved_vlan_id is not None:
+                            bvid_to_vlan[bvid] = resolved_vlan_id
+                        else:
+                            bvid_to_vlan[bvid] = None
+                    except Exception:
+                        bvid_to_vlan[bvid] = bvid
+                        print("Failed to get Vlan id for bvid {}\n".format(bvid))
+
+                vlan_id = bvid_to_vlan[bvid]
+                if vlan_id is None:
+                    # the case could be happened if the FDB entry has created with linking to
+                    # default VLAN 1, which is not present in the system
+                    continue
+            self.bridge_mac_list.append((int(vlan_id), fdb["mac"], if_name))
 
         return
 
@@ -133,7 +143,7 @@ class NbrBase(object):
         """
             Display formatted Neighbor entries (ARP/IPv6 Neigh).
         """
-
+        bridge_mac_dict = {(vlan_id, mac): if_name for vlan_id, mac, if_name in self.bridge_mac_list}
         output = []
 
         for ent in self.nbrdata:
@@ -143,11 +153,10 @@ class NbrBase(object):
             if 'Vlan' in ent[2]:
                 vlanid = int(re.search(r'\d+', ent[2]).group())
                 mac = ent[1].upper()
-                fdb_ent = next((fdb for fdb in self.bridge_mac_list[:]
-                               if fdb[0] == vlanid and fdb[1] == mac), None)
+                fdb_ent = bridge_mac_dict.get((vlanid, mac))
                 vlan = vlanid
                 if fdb_ent is not None:
-                    ent[2] = fdb_ent[2]
+                    ent[2] = fdb_ent
                 else:
                     ent[2] = '-'
             ent.insert(vpos, vlan)
