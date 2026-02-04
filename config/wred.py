@@ -597,7 +597,7 @@ def add_command(config, interface):
         config.add_command(wred)
 
         version_info = device_info.get_sonic_version_info()
-        if version_info and version_info.get('asic_type', '') == 'barefoot':
+        if version_info and version_info.get('asic_type', '') in ('barefoot', 'xsight'):
             wred.add_command(add_bfn)
             wred.add_command(update_bfn)
         else:
