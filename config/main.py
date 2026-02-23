@@ -3592,8 +3592,10 @@ def add_snmp_agent_address(ctx, agentip, port, vrf):
     if not vrf:
         entry = config_db.get_entry('MGMT_VRF_CONFIG', "vrf_global")
         if entry and entry['mgmtVrfEnabled'] == 'true' :
-            click.echo("ManagementVRF is Enabled. Provide vrf.")
-            return False
+            mgmtintf_key_list = _get_all_mgmtinterface_keys()
+            if any(ip.split('/')[0].lower() == agentip.lower() for _, ip in mgmtintf_key_list):
+                click.echo("ManagementVRF is Enabled. Provide vrf.")
+                return False
     found = 0
     ip = ipaddress.ip_address(agentip)
     for intf in netifaces.interfaces():
