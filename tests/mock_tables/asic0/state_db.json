@@ -88,6 +88,14 @@
         "supported_max_laser_freq" : "196100",
         "supported_min_laser_freq" : "191300"
     },
+    "TRANSCEIVER_STATUS|Ethernet0": {
+        "status": "1",
+        "error": "N/A"
+    },
+    "TRANSCEIVER_STATUS|Ethernet4": {
+        "status": "0",
+        "error": "N/A"
+    },
     "CHASSIS_INFO|chassis 1": {
         "psu_num": "2"
     },
