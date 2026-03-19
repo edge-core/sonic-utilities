@@ -15,7 +15,7 @@ from typing import Dict
 import click
 from natsort import natsorted
 from sonic_py_common.interface import front_panel_prefix, backplane_prefix, inband_prefix, recirc_prefix
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, logger
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import (
         QSFP_DATA_MAP,
@@ -25,6 +25,11 @@ from utilities_common.sfp_helper import (
         CCMIS_STATUS_MAP,
 )
 from tabulate import tabulate
+
+SYSLOG_IDENTIFIER = "sfpshow"
+# Global logger instance
+log = logger.Logger(SYSLOG_IDENTIFIER)
+
 
 # Mock the redis DB for unit test purposes
 try:
@@ -558,17 +563,26 @@ class SFPShow(object):
                         self.db, interface, self.dump_dom)
 
     def convert_interface_sfp_presence_state_to_cli_output_string(self, state_db, interface_name):
-        sfp_info_dict = state_db.get_all(self.db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(interface_name))
-        if sfp_info_dict:
-            output = 'Present'
+        status = state_db.get(state_db.STATE_DB, 'TRANSCEIVER_STATUS|{}'.format(interface_name), 'status')
+        if status is None:
+            output = 'N/A'
         else:
-            output = 'Not present'
+            if status == '0':
+                if not self.is_sfp_port(interface_name):
+                    output = 'N/A'
+                else:
+                    output = 'Not present'
+            else:
+                output = 'Present'
+
         return output
 
 
     @multi_asic_util.run_on_multi_asic
     def get_presence(self):
         port_table = []
+
+        self.init_sonic_platform()
 
         if self.intf_name is not None:
             presence_string = self.convert_interface_sfp_presence_state_to_cli_output_string(self.db, self.intf_name)
@@ -582,6 +596,35 @@ class SFPShow(object):
                     port_table.append((key, presence_string))
 
         self.table += port_table
+
+    def init_sonic_platform(self):
+        self.load_platform_chassis()
+
+    def load_platform_chassis(self):
+        global platform_chassis
+
+        platform_chassis = None
+        # Load new platform api class
+        try:
+            import sonic_platform
+            platform_chassis = sonic_platform.platform.Platform().get_chassis()
+        except Exception as e:
+            log.log_warning("import sonic platform fail")
+
+    # NOTE: Consider to use the code at https://gitlab.edge-core.com/root/sonic-utilities/-/blob/ec202111/scripts/portconfig#L167
+    #       at the next ecSonic migration phase
+    def is_sfp_port(self, port_name):
+        NONE_SFP_TYPE = "NONE-SFP"
+        if platform_chassis is not None:
+            port_table = self.db.get_all(self.db.APPL_DB, 'PORT_TABLE:{}'.format(port_name))
+            physical_port = int(port_table['index'])
+            try :
+                if hasattr(platform_chassis.get_sfp(physical_port),'sfp_type'):
+                    if platform_chassis.get_sfp(physical_port).sfp_type == NONE_SFP_TYPE:
+                        return False
+            except Exception as e :
+                log.log_warning("get sfp fail")
+        return True
 
     @multi_asic_util.run_on_multi_asic
     def get_pm(self):

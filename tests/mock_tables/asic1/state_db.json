@@ -72,6 +72,10 @@
         "active_firmware": "X.X",
         "inactive_firmware": "X.X"
     },
+    "TRANSCEIVER_STATUS|Ethernet64": {
+        "status": "1",
+        "error": "N/A"
+    },
     "CHASSIS_INFO|chassis 1": {
         "psu_num": "2"
     },
