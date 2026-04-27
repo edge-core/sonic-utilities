@@ -611,8 +611,6 @@ class SFPShow(object):
         except Exception as e:
             log.log_warning("import sonic platform fail")
 
-    # NOTE: Consider to use the code at https://gitlab.edge-core.com/root/sonic-utilities/-/blob/ec202111/scripts/portconfig#L167
-    #       at the next ecSonic migration phase
     def is_sfp_port(self, port_name):
         NONE_SFP_TYPE = "NONE-SFP"
         if platform_chassis is not None:
